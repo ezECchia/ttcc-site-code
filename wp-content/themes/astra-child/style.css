@@ -1,0 +1,56 @@
+/**
+Theme Name: Astra Child
+Author: Brainstorm Force
+Author URI: http://wpastra.com/about/
+Description: Astra is the fastest, fully customizable & beautiful theme suitable for blogs, personal portfolios and business websites. It is very lightweight (less than 50KB on frontend) and offers unparalleled speed. Built with SEO in mind, Astra comes with schema.org code integrated so search engines will love your site. Astra offers plenty of sidebar options and widget areas giving you a full control for customizations. Furthermore, we have included special features and templates so feel free to choose any of your favorite page builder plugin to create pages flexibly. Some of the other features: # WooCommerce Ready # Responsive # Compatible with major plugins # Translation Ready # Extendible with premium addons # Regularly updated # Designed, Developed, Maintained & Supported by Brainstorm Force. Looking for a perfect base theme? Look no further. Astra is fast, fully customizable and beautiful theme!
+Version: 1.0.0
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: astra-child
+Template: astra
+*/
+@media (min-width: 1025px) {
+	.site-footer-primary-section-1.site-footer-section.site-footer-section-1,
+	.site-footer-primary-section-2.site-footer-section.site-footer-section-2 {
+		width: 10vw;
+	}
+	.site-footer-primary-section-3.site-footer-section.site-footer-section-3,
+	.site-footer-primary-section-4.site-footer-section.site-footer-section-4 {
+		width: 30vw;
+	}
+}
+
+/*結帳頁*/
+.woocommerce-js .select2-container .select2-selection--single, .woocommerce-js select, .woocommerce-page .select2-container .select2-selection--single, .woocommerce-page select, .woocommerce-input-wrapper {
+	line-height: 1;
+	height: 40px;
+}
+#billing_country_field > .woocommerce-input-wrapper {
+	padding: 12px 16px;
+}
+#customer_details h3:not(.elementor-widget-woocommerce-checkout-page h3) {
+	border-bottom: 0;
+}
+.woocommerce-js input[type=text],
+.woocommerce-page input[type=text],
+.woocommerce-js .select2-container .select2-selection--single,
+.woocommerce-page .select2-container .select2-selection--single,
+.woocommerce form .form-row .input-text,
+.woocommerce-page form .form-row .input-text {
+	border-color: #999;
+}
+
+/*結帳頁-LINEPay提示*/
+li.payment_method_linepay-tw > label > img {
+	height: 32px;
+}
+
+/*控制資訊欄元件外觀*/
+.ast-separate-container.ast-two-container #secondary .widget {
+	padding: 0;
+}
+.sidebar-main h3.wc-donation-title  {
+	font-size: 1rem;
+	font-weight: normal;
+	margin-top: 0;
+}
