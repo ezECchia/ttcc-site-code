@@ -242,7 +242,122 @@ add_action( 'woocommerce_admin_order_data_after_order_details', function ( $orde
 	<?php
 } );
 
+add_action( 'woocommerce_admin_order_data_after_order_details', function ( $order ) {
+        if ( ! $order || ! is_a( $order, 'WC_Order' ) ) {
+                return;
+        }
 
+        $order_id    = $order->get_id();
+        $preview_url = wp_nonce_url(
+                admin_url( 'admin-post.php?action=ttcc_receipt_preview&order_id=' . $order_id ),
+                'ttcc_receipt_preview_' . $order_id
+        );
+        $pdf_url = wp_nonce_url(
+                admin_url( 'admin-post.php?action=ttcc_receipt_pdf&order_id=' . $order_id ),
+                'ttcc_receipt_pdf_' . $order_id
+        );
+        $send_url = wp_nonce_url(
+                admin_url( 'admin-post.php?action=ttcc_send_receipt_pdf&order_id=' . $order_id ),
+                'ttcc_send_receipt_pdf_' . $order_id
+        );
+        $receipt_mail_log = $order->get_meta( 'ttcc_receipt_mail_sent_log', true );
+        if ( ! is_array( $receipt_mail_log ) ) {
+                $receipt_mail_log = array();
+        }
+
+        $receipt_mail_count = count( $receipt_mail_log );
+        $latest_receipt_log = ! empty( $receipt_mail_log ) ? end( $receipt_mail_log ) : array();
+
+        $receipt_mail_log = array_reverse( $receipt_mail_log );
+        $receipt_mail_log = array_slice( $receipt_mail_log, 0, 5 );
+        ?>
+        <div class="form-field" style="margin-top:12px;">
+                <h4 style="margin:0 0 8px;">TTCC 收據</h4>
+                <p style="display:flex;gap:8px;flex-wrap:nowrap;align-items:center;margin:0;">
+                        <a class="button" href="<?php echo esc_url( $preview_url ); ?>" target="_blank" rel="noopener">預覽收據</a>
+                        <a class="button button-primary" href="<?php echo esc_url( $pdf_url ); ?>">下載收據</a>
+                        <a class="button" href="<?php echo esc_url( $send_url ); ?>">重寄收據</a>
+                </p>
+
+                <div style="margin-top:10px;font-size:12px;line-height:1.6;">
+                        <strong>收據寄送摘要</strong>
+
+                        <?php
+                        $latest_sent_at = ! empty( $latest_receipt_log['sent_at'] ) ? (string) $latest_receipt_log['sent_at'] : '—';
+                        $latest_success = isset( $latest_receipt_log['success'] ) ? (int) $latest_receipt_log['success'] : null;
+                        $latest_status  = is_null( $latest_success ) ? '—' : ( $latest_success ? '成功' : '失敗' );
+                        $latest_source  = ! empty( $latest_receipt_log['source'] ) ? (string) $latest_receipt_log['source'] : '';
+
+                        if ( $latest_source === 'single_manual' ) {
+                                $latest_source = '單筆手動';
+                        } elseif ( $latest_source === 'bulk_manual' ) {
+                                $latest_source = '批次手動';
+                        }
+
+                        if ( $latest_status !== '—' && $latest_source !== '' ) {
+                                $latest_status .= '｜' . $latest_source;
+                        }
+                        ?>
+
+                        <div style="margin-top:6px;">最近寄送時間：<?php echo esc_html( $latest_sent_at ); ?></div>
+                        <div>累計寄送次數：<?php echo esc_html( (string) $receipt_mail_count ); ?></div>
+                        <div>最近一次結果：<?php echo esc_html( $latest_status ); ?></div>
+
+                        <details style="margin-top:8px;">
+                                <summary style="cursor:pointer;">查看寄送紀錄（最近 5 筆）</summary>
+
+                                <?php if ( empty( $receipt_mail_log ) ) : ?>
+                                        <div style="margin-top:6px;color:#666;">尚無寄送紀錄</div>
+                                <?php else : ?>
+                                        <div style="margin-top:6px;">
+                                                <?php foreach ( $receipt_mail_log as $log_row ) : ?>
+                                                        <?php
+                                                        $log_sent_at = ! empty( $log_row['sent_at'] ) ? (string) $log_row['sent_at'] : '';
+                                                        $log_success = ! empty( $log_row['success'] ) ? 1 : 0;
+                                                        $log_mail_to = '';
+                                                        if ( ! empty( $log_row['mail_to'] ) && is_array( $log_row['mail_to'] ) ) {
+                                                                $log_mail_to = implode( ', ', array_map( 'strval', $log_row['mail_to'] ) );
+                                                        }
+                                                        $log_source = ! empty( $log_row['source'] ) ? (string) $log_row['source'] : '';
+                                                        if ( $log_source === 'single_manual' ) {
+                                                                $log_source = '單筆手動';
+                                                        } elseif ( $log_source === 'bulk_manual' ) {
+                                                                $log_source = '批次手動';
+                                                        }
+                                                        $log_error  = ! empty( $log_row['error_message'] ) ? (string) $log_row['error_message'] : '';
+                                                        ?>
+                                                        <div style="margin:0 0 8px;padding:6px 8px;border:1px solid #e0e0e0;background:#fafafa;max-width:520px;">
+                                                            <div style="white-space:nowrap;">
+                                                                    <?php echo esc_html( $log_sent_at ); ?>
+                                                            </div>
+
+                                                            <div style="margin-top:2px;white-space:nowrap;">
+                                                                    <?php echo $log_success ? '成功' : '失敗'; ?>
+                                                                    <?php if ( $log_source !== '' ) : ?>
+                                                                            ｜<?php echo esc_html( $log_source ); ?>
+                                                                    <?php endif; ?>
+                                                            </div>
+
+                                                            <?php if ( $log_mail_to !== '' ) : ?>
+                                                                    <div style="margin-top:2px;">
+                                                                            收件人：<?php echo esc_html( $log_mail_to ); ?>
+                                                                    </div>
+                                                            <?php endif; ?>
+
+                                                            <?php if ( $log_error !== '' ) : ?>
+                                                                    <div style="margin-top:2px;color:#b32d2e;">
+                                                                            錯誤：<?php echo esc_html( $log_error ); ?>
+                                                                    </div>
+                                                            <?php endif; ?>
+                                                        </div>
+                                                <?php endforeach; ?>
+                                        </div>
+                                <?php endif; ?>
+                        </details>
+                </div>
+        </div>
+        <?php
+}, 20 );
 
 // --- 流水號儲存（兼容 HPOS + 唯一性 + 同步 plain 版；避免遞迴） ---
 add_action('woocommerce_process_shop_order_meta', 'ttcc_save_serial_admin', 10, 2);
@@ -994,29 +1109,1169 @@ function ttcc_rest_orders_by_serial( WP_REST_Request $req ) {
     ], 200);
 }
 
+/**
+ * TTCC 收據：台灣州/縣市英文代碼轉中文
+ */
+function ttcc_get_tw_state_label( $state ) {
+    $state = strtoupper( trim( (string) $state ) );
 
+    $map = array(
+        'TAIPEI CITY'        => '台北市',
+        'NEW TAIPEI CITY'    => '新北市',
+        'TAOYUAN CITY'       => '桃園市',
+        'TAICHUNG CITY'      => '台中市',
+        'TAINAN CITY'        => '台南市',
+        'KAOHSIUNG CITY'     => '高雄市',
+        'KEELUNG CITY'       => '基隆市',
+        'HSINCHU CITY'       => '新竹市',
+        'HSINCHU COUNTY'     => '新竹縣',
+        'MIAOLI COUNTY'      => '苗栗縣',
+        'CHANGHUA COUNTY'    => '彰化縣',
+        'NANTOU COUNTY'      => '南投縣',
+        'YUNLIN COUNTY'      => '雲林縣',
+        'CHIAYI CITY'        => '嘉義市',
+        'CHIAYI COUNTY'      => '嘉義縣',
+        'PINGTUNG COUNTY'    => '屏東縣',
+        'YILAN COUNTY'       => '宜蘭縣',
+        'HUALIEN COUNTY'     => '花蓮縣',
+        'TAITUNG COUNTY'     => '台東縣',
+        'PENGHU COUNTY'      => '澎湖縣',
+        'KINMEN COUNTY'      => '金門縣',
+        'LIENCHIANG COUNTY'  => '連江縣',
+    );
+
+    return isset( $map[ $state ] ) ? $map[ $state ] : $state;
+}
+
+/**
+ * TTCC 收據：整理單筆訂單資料（2026 樣本第一版）
+ */
+function ttcc_get_receipt_data( $order_id ) {
+    $order_id = absint( $order_id );
+    if ( ! $order_id ) {
+        return null;
+    }
+
+    $order = wc_get_order( $order_id );
+    if ( ! $order ) {
+        return null;
+    }
+
+    $first_name = trim( (string) $order->get_billing_first_name() );
+    $last_name  = trim( (string) $order->get_billing_last_name() );
+    $full_name  = trim( $last_name . $first_name );
+
+    if ( $full_name === '' ) {
+        $full_name = trim( (string) $order->get_billing_company() );
+    }
+
+    $id_info = trim( (string) $order->get_meta( 'id_info' ) );
+
+    $billing_postcode  = trim( (string) $order->get_billing_postcode() );
+    $billing_state_raw = trim( (string) $order->get_billing_state() );
+    $billing_state     = ttcc_get_tw_state_label( $billing_state_raw );
+    $billing_city      = trim( (string) $order->get_billing_city() );
+    $billing_address_1 = trim( (string) $order->get_billing_address_1() );
+    $billing_address_2 = trim( (string) $order->get_billing_address_2() );
+
+    $address_tail_parts = array(
+        $billing_state,
+        $billing_city,
+        $billing_address_1,
+        $billing_address_2,
+    );
+    $address_tail_parts = array_filter( $address_tail_parts, function( $v ) {
+        return $v !== '';
+    } );
+
+    $address_tail = implode( '', $address_tail_parts );
+
+    if ( $billing_postcode !== '' && $address_tail !== '' ) {
+        $receipt_address = $billing_postcode . ' ' . $address_tail;
+    } elseif ( $billing_postcode !== '' ) {
+        $receipt_address = $billing_postcode;
+    } else {
+        $receipt_address = $address_tail;
+    }
+
+    $date_created = $order->get_date_created();
+    $receipt_date = $date_created ? $date_created->date_i18n( 'Y/m/d' ) : '';
+
+    $serial = trim( (string) $order->get_meta( '_custom_serial_number' ) );
+
+    $amount = $order->get_total();
+    $amount = is_numeric( $amount ) ? (float) $amount : 0;
+
+    return array(
+        'order_id'            => $order->get_id(),
+        'receipt_no'          => $serial,
+        'receipt_date'        => $receipt_date,
+        'donor_name'          => $full_name,
+        'donor_id_info'       => $id_info,
+        'recipient_email'     => trim( (string) $order->get_billing_email() ),
+        'recipient_phone'     => trim( (string) $order->get_billing_phone() ),
+        'receipt_address'     => $receipt_address,
+        'donation_amount'     => $amount,
+        'donation_amount_int' => (int) round( $amount ),
+        'receipt_generated'   => (string) $order->get_meta( 'receipt_generated' ),
+        'template_year'       => '2026',
+        'logo_path'           => ABSPATH . 'wp-content/ttcc/cellImage_0_0.jpg',
+        'qrcode_path'         => ABSPATH . 'wp-content/ttcc/cellImage_0_1.jpg',
+        'seal_path'           => ABSPATH . 'wp-content/ttcc/cellImage_0_2.jpg',
+        'chairman_sign_path'  => ABSPATH . 'wp-content/ttcc/cellImage_0_3.jpg',
+        'handler_sign_path'   => ABSPATH . 'wp-content/ttcc/cellImage_0_4.jpg',
+    );
+}
+
+/**
+ * TTCC 收據：把本機圖片檔轉成 data URI
+ */
+function ttcc_img_file_to_data_uri( $file_path ) {
+    $file_path = (string) $file_path;
+
+    if ( $file_path === '' || ! file_exists( $file_path ) || ! is_readable( $file_path ) ) {
+        return '';
+    }
+
+    $mime = function_exists( 'mime_content_type' ) ? mime_content_type( $file_path ) : '';
+    if ( ! $mime ) {
+        $ext = strtolower( pathinfo( $file_path, PATHINFO_EXTENSION ) );
+        if ( $ext === 'png' ) {
+            $mime = 'image/png';
+        } elseif ( $ext === 'webp' ) {
+            $mime = 'image/webp';
+        } else {
+            $mime = 'image/jpeg';
+        }
+    }
+
+    $bin = file_get_contents( $file_path );
+    if ( $bin === false ) {
+        return '';
+    }
+
+    return 'data:' . $mime . ';base64,' . base64_encode( $bin );
+}
+
+/**
+ * TTCC 收據：2026 版 HTML
+ */
+function ttcc_render_receipt_2026_html( $order_id ) {
+    $data = ttcc_get_receipt_data( $order_id );
+    if ( empty( $data ) || ! is_array( $data ) ) {
+        return '<p>找不到收據資料</p>';
+    }
+
+    $logo_src      = ttcc_img_file_to_data_uri( $data['logo_path'] );
+    $qrcode_src    = ttcc_img_file_to_data_uri( $data['qrcode_path'] );
+    $seal_src      = ttcc_img_file_to_data_uri( $data['seal_path'] );
+    $chairman_src  = ttcc_img_file_to_data_uri( $data['chairman_sign_path'] );
+    $handler_src   = ttcc_img_file_to_data_uri( $data['handler_sign_path'] );
+
+    $receipt_no      = esc_html( $data['receipt_no'] );
+    $receipt_date    = esc_html( $data['receipt_date'] );
+    $donor_name      = esc_html( $data['donor_name'] );
+    $donor_id_info   = trim( (string) $data['donor_id_info'] );
+    $receipt_address = esc_html( $data['receipt_address'] );
+    $amount          = number_format( (int) $data['donation_amount_int'] );
+
+    if ( $donor_id_info === '' ) {
+        $donor_id_info = '未提供';
+    }
+    $donor_id_info = esc_html( $donor_id_info );
+
+    ob_start();
+    ?>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>TTCC 2026 捐款收據預覽</title>
+<style>
+    @page {
+        size: A5 landscape;
+        margin: 8mm 10mm 8mm 10mm;
+    }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        color: #111;
+        font-family: "PMingLiU", "MingLiU", "Noto Serif TC", "Microsoft JhengHei", serif;
+        font-size: 12px;
+        line-height: 1.
+    }
+
+    body {
+        background: #fff;
+    }
+
+    .page {
+        width: 190mm;
+        min-height: 126mm;
+        margin: 0 auto;
+        box-sizing: border-box;
+        padding: 0;
+    }
+
+    .receipt {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 1mm 0 0 0;
+    }
+
+    .brand-row {
+        text-align: center;
+        margin-bottom: 1mm;
+    }
+
+    .brand-logo {
+        display: inline-block;
+        width: 80mm;
+        max-width: 100%;
+        height: auto;
+    }
+
+    .title-row {
+        text-align: center;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        margin-bottom: 1.5mm;
+    }
+
+    .meta-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        margin-bottom: 1.5mm;
+    }
+
+    .meta-table td {
+        padding: 0.3mm 0;
+        vertical-align: top;
+        font-size: 13px;
+        letter-spacing: 2px;
+    }
+
+    .meta-left {
+        width: 58%;
+        text-align: left;
+        white-space: nowrap;
+    }
+
+    .meta-right {
+        width: 42%;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .receipt-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        margin-bottom: 1mm;
+        border: 3px solid #000;
+    }
+
+    .receipt-table td {
+        border: 2px solid #000;
+        padding: 1.4mm 2.2mm;
+        vertical-align: middle;
+        font-size: 13px;
+        letter-spacing: 2px;
+        word-break: break-word;
+    }
+
+    .label-cell {
+        width: 25%;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .value-cell {
+        width: 60%;
+        text-align: left;
+    }
+
+    .qr-cell {
+        width: 15%;
+        text-align: center;
+        vertical-align: middle;
+        padding: 0;
+    }
+
+    .qr-cell-inner {
+        min-height: 38mm;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1mm;
+        box-sizing: border-box;
+    }
+
+    .qr-img {
+        width: 26mm;
+        height: auto;
+        display: block;
+    }
+
+    .money {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
+    }
+
+    .sign-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        margin-bottom: 1.2mm;
+    }
+
+    .sign-table td {
+        padding: 0;
+        vertical-align: top;
+        font-size: 13px;
+        letter-spacing: 2px;
+    }
+
+    .sign-left {
+        width: 40%;
+        text-align: center;
+    }
+
+    .sign-mid {
+        width: 30%;
+        text-align: center;
+    }
+
+    .sign-right {
+        width: 30%;
+        text-align: center;
+    }
+
+    .inline-sign {
+        display: inline-flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 2mm;
+    }
+
+    .inline-sign .label {
+        white-space: nowrap;
+        padding-top: 12px;
+    }
+
+    .seal-img {
+        width: 20mm;
+        height: auto;
+        display: block;
+        margin-top: -10px;
+    }
+
+    .sign-img {
+        width: 10mm;
+        height: auto;
+        display: block;
+    }
+
+    .bottom-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        margin-top: 0;
+    }
+
+    .bottom-table td {
+        vertical-align: top;
+        font-size: 12px;
+        letter-spacing: 1px;
+        padding: 0;
+    }
+
+    .bottom-left {
+        width: 48%;
+        text-align: left;
+        padding-right: 6mm;
+    }
+
+    .bottom-right {
+        width: 52%;
+        text-align: left;
+    }
+
+    .bottom-line {
+        margin-bottom: 0.3mm;
+        white-space: nowrap;
+    }
+</style>
+</head>
+<body>
+<div class="page">
+    <section class="receipt">
+
+        <div class="brand-row">
+            <?php if ( $logo_src ) : ?>
+                <img class="brand-logo" src="<?php echo esc_attr( $logo_src ); ?>" alt="">
+            <?php endif; ?>
+        </div>
+
+        <div class="title-row">捐款收據</div>
+
+        <table class="meta-table">
+            <tr>
+                <td class="meta-left">統一編號：25687479</td>
+                <td class="meta-right">捐款日期：<?php echo $receipt_date; ?></td>
+            </tr>
+            <tr>
+                <td class="meta-left">立案字號：衛署醫字第 0990206548 號</td>
+                <td class="meta-right">收據編號：<?php echo $receipt_no; ?></td>
+            </tr>
+        </table>
+
+        <table class="receipt-table">
+            <colgroup>
+                <col style="width:20%;">
+                <col style="width:60%;">
+                <col style="width:20%;">
+            </colgroup>
+            <tr>
+                <td class="label-cell">捐款者</td>
+                <td class="value-merged-cell" colspan="2"><?php echo $donor_name !== '' ? $donor_name : '&nbsp;'; ?></td>
+            </tr>
+            <tr>
+                <td class="label-cell">身分證字號/統編</td>
+                <td class="value-cell"><?php echo $donor_id_info; ?></td>
+                <td class="qr-cell" rowspan="4">
+                    <div class="qr-cell-inner">
+                        <?php if ( $qrcode_src ) : ?>
+                            <img class="qr-img" src="<?php echo esc_attr( $qrcode_src ); ?>" alt="">
+                        <?php endif; ?>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="label-cell">收據地址</td>
+                <td class="value-cell"><?php echo $receipt_address !== '' ? $receipt_address : '&nbsp;'; ?></td>
+            </tr>
+            <tr>
+                <td class="label-cell">捐款金額（新台幣）</td>
+                <td class="value-cell money">NT$ <?php echo esc_html( $amount ); ?></td>
+            </tr>
+            <tr>
+                <td class="label-cell">備註</td>
+                <td class="value-cell">本捐款單可做為扣抵稅額用</td>
+            </tr>
+        </table>
+
+        <table class="sign-table">
+            <tr>
+                <td class="sign-left">
+                    <div class="inline-sign">
+                        <div class="label">本會大印</div>
+                        <?php if ( $seal_src ) : ?>
+                            <img class="seal-img" src="<?php echo esc_attr( $seal_src ); ?>" alt="">
+                        <?php endif; ?>
+                    </div>
+                </td>
+                <td class="sign-mid">
+                    <div class="inline-sign">
+                        <div class="label">董事長：</div>
+                        <?php if ( $chairman_src ) : ?>
+                            <img class="sign-img" src="<?php echo esc_attr( $chairman_src ); ?>" alt="">
+                        <?php endif; ?>
+                    </div>
+                </td>
+                <td class="sign-right">
+                    <div class="inline-sign">
+                        <div class="label">經手人：</div>
+                        <?php if ( $handler_src ) : ?>
+                            <img class="sign-img" src="<?php echo esc_attr( $handler_src ); ?>" alt="">
+                        <?php endif; ?>
+                    </div>
+                </td>
+            </tr>
+        </table>
+
+        <table class="bottom-table">
+            <tr>
+                <td class="bottom-left">
+                    <div class="bottom-line">戶　　名：財團法人台灣癌症全人關懷基金會</div>
+                    <div class="bottom-line">分　　行：玉山銀行 營業部</div>
+                    <div class="bottom-line">捐款帳號：0015-940-139571</div>
+                </td>
+                <td class="bottom-right">
+                    <div class="bottom-line">郵政劃撥帳號：50161441</div>
+                    <div class="bottom-line">地址：104011 台北市中山區民生東路一段 26號11 樓之 2</div>
+                    <div class="bottom-line">服務電話/E-Mail：02-25813136/cancercare@ttcc.org.tw</div>
+                </td>
+            </tr>
+        </table>
+
+    </section>
+</div>
+</body>
+</html>
+    <?php
+    return ob_get_clean();
+}
+
+function ttcc_generate_receipt_pdf_binary( $order_id ) {
+
+    $html = ttcc_render_receipt_2026_html( $order_id );
+
+    if ( ! is_string( $html ) || trim( $html ) === '' ) {
+        return new WP_Error( 'invalid_html', 'Receipt HTML is empty' );
+    }
+
+    if ( strpos( $html, '<html' ) === false ) {
+        return new WP_Error( 'invalid_html', 'INVALID HTML RESPONSE: ' . substr( $html, 0, 200 ) );
+    }
+
+    $upload_dir = wp_upload_dir();
+    $tmp_dir    = trailingslashit( $upload_dir['basedir'] ) . 'ttcc-receipt-pdf-tmp';
+
+    if ( ! file_exists( $tmp_dir ) ) {
+        wp_mkdir_p( $tmp_dir );
+    }
+
+    $tmp_html = trailingslashit( $tmp_dir ) . 'ttcc-receipt-' . $order_id . '-' . time() . '.html';
+    file_put_contents( $tmp_html, $html );
+
+    $ch = curl_init();
+
+    curl_setopt_array( $ch, array(
+        CURLOPT_URL            => 'https://gotenberg-proxy-668416723649.asia-east1.run.app/forms/chromium/convert/html',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => array(
+            'files'             => new CURLFile( $tmp_html, 'text/html', 'index.html' ),
+            'printBackground'   => 'true',
+            'preferCssPageSize' => 'true',
+            'waitDelay'         => '2s',
+        ),
+        CURLOPT_TIMEOUT        => 30,
+    ) );
+
+    $pdf_binary = curl_exec( $ch );
+    $http_code  = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+
+    if ( $pdf_binary === false ) {
+        $error = curl_error( $ch );
+        curl_close( $ch );
+        if ( file_exists( $tmp_html ) ) {
+            unlink( $tmp_html );
+        }
+        return new WP_Error( 'curl_failed', 'CURL ERROR: ' . $error );
+    }
+
+    curl_close( $ch );
+
+    if ( file_exists( $tmp_html ) ) {
+        unlink( $tmp_html );
+    }
+
+    if ( $http_code !== 200 ) {
+        return new WP_Error( 'gotenberg_http_error', 'HTTP ERROR: ' . $http_code . ' | ' . substr( $pdf_binary, 0, 200 ) );
+    }
+
+    if ( strpos( $pdf_binary, '%PDF' ) !== 0 ) {
+        return new WP_Error( 'invalid_pdf', 'PDF binary invalid' );
+    }
+
+    return $pdf_binary;
+}
+
+function ttcc_generate_receipt_pdf_file( $order_id ) {
+
+    $pdf_binary = ttcc_generate_receipt_pdf_binary( $order_id );
+
+    if ( is_wp_error( $pdf_binary ) ) {
+        return $pdf_binary;
+    }
+
+    $upload_dir = wp_upload_dir();
+    $tmp_dir    = trailingslashit( $upload_dir['basedir'] ) . 'ttcc-receipt-pdf-tmp';
+
+    if ( ! file_exists( $tmp_dir ) ) {
+        wp_mkdir_p( $tmp_dir );
+    }
+
+    $data = ttcc_get_receipt_data( $order_id );
+
+    $receipt_no = '';
+    if ( is_array( $data ) && ! empty( $data['receipt_no'] ) ) {
+        $receipt_no = preg_replace( '/[^A-Za-z0-9\-_]/', '', (string) $data['receipt_no'] );
+    }
+
+    if ( $receipt_no === '' ) {
+        $receipt_no = 'order-' . absint( $order_id );
+    }
+
+    $pdf_path = trailingslashit( $tmp_dir ) . 'TTCC-receipt-' . $receipt_no . '.pdf';
+
+    $written = file_put_contents( $pdf_path, $pdf_binary );
+
+    if ( $written === false || ! file_exists( $pdf_path ) ) {
+        return new WP_Error( 'pdf_write_failed', 'Failed to write PDF file' );
+    }
+
+    return $pdf_path;
+}
+
+/**
+ * TTCC 收據：2026 預覽入口
+ * 用法：
+ * /wp-admin/admin-post.php?action=ttcc_receipt_preview&order_id=24236
+ */
+add_action( 'admin_post_ttcc_receipt_preview', 'ttcc_receipt_preview_handler' );
+
+function ttcc_receipt_preview_handler() {
+    if ( ! current_user_can( 'manage_woocommerce' ) ) {
+        wp_die( '權限不足' );
+    }
+
+    $order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+    if ( ! $order_id ) {
+        wp_die( '缺少 order_id' );
+    }
+
+    check_admin_referer( 'ttcc_receipt_preview_' . $order_id );
+
+    nocache_headers();
+    header( 'Content-Type: text/html; charset=utf-8' );
+
+    echo ttcc_render_receipt_2026_html( $order_id );
+    exit;
+}
+
+add_action( 'admin_post_ttcc_receipt_pdf', 'ttcc_receipt_pdf_handler' );
+
+function ttcc_receipt_pdf_handler() {
+    if ( ! current_user_can( 'manage_woocommerce' ) ) {
+        wp_die( '權限不足' );
+    }
+
+    $order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+    if ( ! $order_id ) {
+        wp_die( '缺少 order_id' );
+    }
+
+    check_admin_referer( 'ttcc_receipt_pdf_' . $order_id );
+
+    $pdf_file = ttcc_generate_receipt_pdf_file( $order_id );
+
+    if ( is_wp_error( $pdf_file ) ) {
+        wp_die( esc_html( $pdf_file->get_error_message() ) );
+    }
+
+    if ( ! file_exists( $pdf_file ) ) {
+        wp_die( 'PDF 檔案不存在' );
+    }
+
+    $filename = basename( $pdf_file );
+
+    nocache_headers();
+    header( 'Content-Type: application/pdf' );
+    header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+    header( 'Content-Length: ' . filesize( $pdf_file ) );
+
+    readfile( $pdf_file );
+    exit;
+}
+
+function ttcc_log_receipt_mail_result( $order_id, $mail_to, $receipt_no, $sent, $extra = array() ) {
+    $order = wc_get_order( $order_id );
+    if ( ! $order ) {
+        return;
+    }
+
+    $count = (int) $order->get_meta( 'ttcc_receipt_mail_send_count', true );
+    $count++;
+    $order->update_meta_data( 'ttcc_receipt_mail_send_count', $count );
+
+    $sent_at = current_time( 'mysql' );
+    $order->update_meta_data( 'ttcc_receipt_mail_last_sent_at', $sent_at );
+
+    $log = $order->get_meta( 'ttcc_receipt_mail_sent_log', true );
+    if ( ! is_array( $log ) ) {
+        $log = array();
+    }
+
+    $row = array(
+        'sent_at'    => $sent_at,
+        'mail_to'    => is_array( $mail_to ) ? array_values( $mail_to ) : array( (string) $mail_to ),
+        'receipt_no' => (string) $receipt_no,
+        'success'    => $sent ? 1 : 0,
+    );
+
+    if ( ! empty( $extra ) && is_array( $extra ) ) {
+        $row = array_merge( $row, $extra );
+    }
+
+    $log[] = $row;
+    $order->update_meta_data( 'ttcc_receipt_mail_sent_log', $log );
+
+    $order->save();
+}
+
+function ttcc_get_receipt_mail_recipients( $order_id, $args = array() ) {
+    $args = wp_parse_args(
+        $args,
+        array(
+            'mode'    => 'test',
+            'mail_to' => array(
+                'chia@mplus01.com',
+                'shine_ivy@hotmail.com',
+            ),
+        )
+    );
+
+    $mail_to = array();
+
+    if ( $args['mode'] === 'live' ) {
+        $order = wc_get_order( $order_id );
+
+        if ( ! $order ) {
+            return new WP_Error( 'ttcc_order_not_found', '找不到訂單' );
+        }
+
+        $billing_email = trim( (string) $order->get_billing_email() );
+
+        if ( $billing_email === '' ) {
+            return new WP_Error( 'ttcc_live_mail_to_empty', '此訂單沒有捐款人 Email，無法正式寄送收據' );
+        }
+
+        $mail_to = array( $billing_email );
+    } else {
+        $mail_to = $args['mail_to'];
+    }
+
+    if ( ! is_array( $mail_to ) ) {
+        $mail_to = array( (string) $mail_to );
+    }
+
+    $mail_to = array_values( array_filter( array_map( 'trim', $mail_to ) ) );
+
+    if ( empty( $mail_to ) ) {
+        if ( $args['mode'] === 'live' ) {
+            return new WP_Error( 'ttcc_live_mail_to_empty', '此訂單沒有捐款人 Email，無法正式寄送收據' );
+        }
+
+        return new WP_Error( 'ttcc_mail_to_empty', '收件人不可為空' );
+    }
+
+    return $mail_to;
+}
+
+function ttcc_send_receipt_pdf_email( $order_id, $args = array() ) {
+    $args = wp_parse_args(
+        $args,
+        array(
+            'mode'    => 'test',
+            'mail_to' => array(
+                'chia@mplus01.com',
+                'shine_ivy@hotmail.com',
+            ),
+            'source'  => 'single_manual',
+            'user_id' => get_current_user_id(),
+        )
+    );
+
+    $order = wc_get_order( $order_id );
+    if ( ! $order ) {
+        return new WP_Error( 'ttcc_order_not_found', '找不到訂單' );
+    }
+
+    $pdf_file = ttcc_generate_receipt_pdf_file( $order_id );
+    if ( is_wp_error( $pdf_file ) ) {
+        ttcc_log_receipt_mail_result(
+            $order_id,
+            array(),
+            '',
+            false,
+            array(
+                'source'        => (string) $args['source'],
+                'user_id'       => (int) $args['user_id'],
+                'error_message' => $pdf_file->get_error_message(),
+            )
+        );
+
+        return $pdf_file;
+    }
+
+    if ( ! file_exists( $pdf_file ) ) {
+        ttcc_log_receipt_mail_result(
+            $order_id,
+            array(),
+            '',
+            false,
+            array(
+                'source'        => (string) $args['source'],
+                'user_id'       => (int) $args['user_id'],
+                'error_message' => 'PDF 檔案不存在',
+            )
+        );
+
+        return new WP_Error( 'ttcc_pdf_missing', 'PDF 檔案不存在' );
+    }
+
+    $data = ttcc_get_receipt_data( $order_id );
+
+    $receipt_no = '';
+    if ( is_array( $data ) && ! empty( $data['receipt_no'] ) ) {
+        $receipt_no = (string) $data['receipt_no'];
+    }
+
+    $mail_to = ttcc_get_receipt_mail_recipients( $order_id, $args );
+
+    if ( is_wp_error( $mail_to ) ) {
+        ttcc_log_receipt_mail_result(
+            $order_id,
+            array(),
+            $receipt_no,
+            false,
+            array(
+                'source'        => (string) $args['source'],
+                'user_id'       => (int) $args['user_id'],
+                'error_message' => $mail_to->get_error_message(),
+            )
+        );
+
+        return $mail_to;
+    }
+
+    $subject = '捐款收據';
+    if ( $receipt_no !== '' ) {
+        $subject .= '｜' . $receipt_no;
+    }
+
+    $donor_name = '';
+    if ( is_array( $data ) && ! empty( $data['donor_name'] ) ) {
+        $donor_name = trim( (string) $data['donor_name'] );
+    }
+    if ( $donor_name === '' ) {
+        $donor_name = '捐款人';
+    }
+
+    $body  = '<!DOCTYPE html>';
+    $body .= '<html lang="zh-Hant">';
+    $body .= '<head>';
+    $body .= '<meta charset="UTF-8">';
+    $body .= '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+    $body .= '<title>捐款收據</title>';
+    $body .= '</head>';
+    $body .= '<body style="margin:0; padding:0; background-color:#f6f6f6; background-image:url(https://www.ttcc.org.tw/wp-content/uploads/2025/09/mailbackground-scaled.jpg); background-repeat:no-repeat; background-position:center top; background-size:cover;">';
+    $body .= '<div style="margin:0; padding:40px 16px;">';
+    $body .= '<div style="max-width:720px; margin:0 0 0 160px; background:transparent; border-radius:12px; padding:32px 28px; color:#333333; font-size:16px; line-height:1.9;">';
+
+    $body .= '<p style="margin:0 0 20px; font-weight:700;">親愛的 ' . esc_html( $donor_name ) . ' 您好：</p>';
+    $body .= '<p style="margin:0 0 20px;">感謝您伸出援手，支持本會。</p>';
+    $body .= '<p style="margin:0 0 20px;">因為有您，我們能夠走進更多校園，傳遞正確的癌症知識；走進病房與家中，為癌友與家屬帶去鼓勵與溫暖；開設更多專業課程，培養更多守護生命的力量。</p>';
+    $body .= '<p style="margin:0 0 20px;">您的捐款，不只是金額，而是陪伴、是希望、是力量。<br>讓我們一起，守護更多生命的笑容。</p>';
+    $body .= '<p style="margin:0 0 20px;">再次謝謝您的愛心 💗</p>';
+    $body .= '<p style="margin:0; font-weight:700;">財團法人台灣癌症全人關懷基金會 敬啟</p>';
+    $body .= '<div style="margin-top:24px; text-align:right;">';
+    $body .= '<img src="https://www.ttcc.org.tw/wp-content/uploads/2025/09/mailbackground2.png" alt="台灣癌症全人關懷基金會宣導圖" style="display:inline-block; max-width:360px; width:100%; height:auto; border:0;">';
+    $body .= '</div>';
+
+    $body .= '</div>';
+    $body .= '</div>';
+    $body .= '</body>';
+    $body .= '</html>';
+
+    $headers = array(
+        'Content-Type: text/html; charset=UTF-8',
+        'From: 財團法人台灣癌症全人關懷基金會 <no-reply@ttcc.org.tw>',
+        'Reply-To: service@ttcc.org.tw',
+        'Bcc: service@ttcc.org.tw',
+    );
+    $attachments = array( $pdf_file );
+
+    $sent = wp_mail( $mail_to, $subject, $body, $headers, $attachments );
+
+    $log_extra = array(
+        'source'  => (string) $args['source'],
+        'user_id' => (int) $args['user_id'],
+    );
+
+    if ( ! $sent ) {
+        $log_extra['error_message'] = 'wp_mail 寄送失敗';
+    }
+
+    ttcc_log_receipt_mail_result(
+        $order_id,
+        $mail_to,
+        $receipt_no,
+        $sent,
+        $log_extra
+    );
+
+    return array(
+        'success'    => (bool) $sent,
+        'mail_to'    => $mail_to,
+        'receipt_no' => $receipt_no,
+        'pdf_file'   => $pdf_file,
+        'subject'    => $subject,
+    );
+}
+
+add_action( 'admin_post_ttcc_send_receipt_pdf', 'ttcc_send_receipt_pdf_handler' );
+
+function ttcc_send_receipt_pdf_handler() {
+    if ( ! current_user_can( 'manage_woocommerce' ) ) {
+        wp_die( '權限不足' );
+    }
+
+    $order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+    if ( ! $order_id ) {
+        wp_die( '缺少 order_id' );
+    }
+
+    check_admin_referer( 'ttcc_send_receipt_pdf_' . $order_id );
+
+    $result = ttcc_send_receipt_pdf_email(
+        $order_id,
+        array(
+            'mode'    => 'live',
+            'mail_to' => array(
+                'chia@mplus01.com',
+                'shine_ivy@hotmail.com',
+            ),
+            'source'  => 'single_manual',
+            'user_id' => get_current_user_id(),
+        )
+    );
+
+    if ( is_wp_error( $result ) ) {
+        $redirect_url = add_query_arg(
+            array(
+                'ttcc_receipt_mail' => 'error',
+                'ttcc_order_id'     => $order_id,
+                'ttcc_mail_msg'     => rawurlencode( $result->get_error_message() ),
+            ),
+            admin_url( 'post.php?post=' . $order_id . '&action=edit' )
+        );
+        wp_safe_redirect( $redirect_url );
+        exit;
+    }
+
+    $mail_to_text = '';
+    if ( ! empty( $result['mail_to'] ) && is_array( $result['mail_to'] ) ) {
+        $mail_to_text = implode( ', ', $result['mail_to'] );
+    }
+
+    $redirect_url = add_query_arg(
+        array(
+            'ttcc_receipt_mail' => ! empty( $result['success'] ) ? 'success' : 'error',
+            'ttcc_order_id'     => $order_id,
+            'ttcc_mail_msg'     => ! empty( $result['success'] )
+                ? rawurlencode( 'PDF 已寄送到 ' . $mail_to_text )
+                : rawurlencode( 'wp_mail 寄送失敗' ),
+        ),
+        admin_url( 'post.php?post=' . $order_id . '&action=edit' )
+    );
+
+    wp_safe_redirect( $redirect_url );
+    exit;
+}
+
+add_action( 'admin_notices', 'ttcc_receipt_mail_admin_notice' );
+
+function ttcc_receipt_mail_admin_notice() {
+    if ( empty( $_GET['ttcc_receipt_mail'] ) || empty( $_GET['ttcc_mail_msg'] ) ) {
+        return;
+    }
+
+    $status = sanitize_text_field( wp_unslash( $_GET['ttcc_receipt_mail'] ) );
+    $msg    = sanitize_text_field( wp_unslash( $_GET['ttcc_mail_msg'] ) );
+
+    if ( $status === 'success' ) {
+        echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( $msg ) . '</p></div>';
+        return;
+    }
+
+    echo '<div class="notice notice-error is-dismissible"><p>' . esc_html( $msg ) . '</p></div>';
+}
+
+/**
+ * TTCC 收據：臨時測試入口（僅管理員）
+ * 用法：
+ * /wp-admin/admin-post.php?action=ttcc_receipt_debug&order_id=24236
+ */
+add_action( 'admin_post_ttcc_receipt_debug', 'ttcc_receipt_debug_handler' );
+
+function ttcc_receipt_debug_handler() {
+    if ( ! current_user_can( 'manage_woocommerce' ) ) {
+        wp_die( '權限不足' );
+    }
+
+    $order_id = isset( $_GET['order_id'] ) ? absint( $_GET['order_id'] ) : 0;
+    if ( ! $order_id ) {
+        wp_die( '缺少 order_id' );
+    }
+
+    $data = ttcc_get_receipt_data( $order_id );
+
+    if ( empty( $data ) || ! is_array( $data ) ) {
+        wp_die( '找不到收據資料' );
+    }
+
+    nocache_headers();
+    header( 'Content-Type: text/plain; charset=utf-8' );
+
+    echo "TTCC Receipt Debug\n";
+    echo "===================\n\n";
+    print_r( $data );
+    exit;
+}
 
 //===========================================================訂單列表
 // 正確註冊收據編號欄位（支援 HPOS & 螢幕顯示選項）
 // 加入欄位：HPOS 專用 hooks
 add_filter( 'manage_woocommerce_page_wc-orders_columns', 'yess_add_serial_column_hpos' );
 function yess_add_serial_column_hpos( $columns ) {
-	$columns['custom_serial_number'] = '收據編號';
-	return $columns;
+        $columns['custom_serial_number']     = '收據編號';
+        $columns['ttcc_receipt_mail_status'] = '收據寄送';
+        return $columns;
 }
 
 // 顯示欄位內容：HPOS 專用 hooks
 add_action( 'manage_woocommerce_page_wc-orders_custom_column', 'yess_show_serial_column_hpos', 10, 2 );
 function yess_show_serial_column_hpos( $column, $order ) {
-	if ( $column === 'custom_serial_number' && is_a( $order, 'WC_Order' ) ) {
-		$serial = $order->get_meta( '_custom_serial_number' );
-		echo $serial ? esc_html( $serial ) : '—';
-	}
+    if ( $column === 'custom_serial_number' && is_a( $order, 'WC_Order' ) ) {
+            $serial = $order->get_meta( '_custom_serial_number' );
+            echo $serial ? esc_html( $serial ) : '—';
+    }
+
+    if ( $column === 'ttcc_receipt_mail_status' && is_a( $order, 'WC_Order' ) ) {
+            $receipt_mail_log = $order->get_meta( 'ttcc_receipt_mail_sent_log', true );
+
+            if ( empty( $receipt_mail_log ) || ! is_array( $receipt_mail_log ) ) {
+                    echo '未寄送';
+                    return;
+            }
+
+            $latest_log     = end( $receipt_mail_log );
+            $success        = isset( $latest_log['success'] ) ? (int) $latest_log['success'] : null;
+            $error_message  = ! empty( $latest_log['error_message'] ) ? trim( (string) $latest_log['error_message'] ) : '';
+
+            if ( is_null( $success ) ) {
+                    echo '未寄送';
+            } elseif ( $success ) {
+                    echo '成功';
+            } else {
+                    if ( $error_message === '此訂單沒有捐款人 Email，無法正式寄送收據' ) {
+                            echo '失敗：缺捐款者email';
+                    } else {
+                            echo '失敗';
+                    }
+            }
+    }
 }
+
 add_filter( 'woocommerce_shop_order_search_fields', function( $search_fields ) {
     $search_fields[] = '_custom_serial_number'; // 注意這裡要加底線 _
     return $search_fields;
 } );
+
+add_filter( 'bulk_actions-woocommerce_page_wc-orders', 'ttcc_add_receipt_bulk_action' );
+function ttcc_add_receipt_bulk_action( $bulk_actions ) {
+    $bulk_actions['ttcc_send_receipt_pdf_bulk'] = '批次寄送捐款收據';
+    return $bulk_actions;
+}
+
+add_filter( 'handle_bulk_actions-woocommerce_page_wc-orders', 'ttcc_handle_receipt_bulk_action', 10, 3 );
+function ttcc_handle_receipt_bulk_action( $redirect_to, $action, $order_ids ) {
+    if ( $action !== 'ttcc_send_receipt_pdf_bulk' ) {
+        return $redirect_to;
+    }
+
+    $success_count              = 0;
+    $error_count                = 0;
+    $missing_donor_email_count  = 0;
+
+    if ( ! is_array( $order_ids ) ) {
+        $order_ids = array();
+    }
+
+    foreach ( $order_ids as $order_id ) {
+        $order_id = absint( $order_id );
+        if ( ! $order_id ) {
+            $error_count++;
+            continue;
+        }
+
+        $result = ttcc_send_receipt_pdf_email(
+            $order_id,
+            array(
+                'mode'    => 'live',
+                'mail_to' => array(
+                    'chia@mplus01.com',
+                    'shine_ivy@hotmail.com',
+                ),
+                'source'  => 'bulk_manual',
+                'user_id' => get_current_user_id(),
+            )
+        );
+
+        if ( is_wp_error( $result ) ) {
+            $error_count++;
+
+            if ( $result->get_error_code() === 'ttcc_live_mail_to_empty' ) {
+                $missing_donor_email_count++;
+            }
+
+            continue;
+        }
+
+        if ( ! empty( $result['success'] ) ) {
+            $success_count++;
+        } else {
+            $error_count++;
+        }
+    }
+
+    $redirect_to = add_query_arg(
+        array(
+            'ttcc_bulk_receipt_mail'                => 1,
+            'ttcc_bulk_receipt_mail_success'        => $success_count,
+            'ttcc_bulk_receipt_mail_error'          => $error_count,
+            'ttcc_bulk_receipt_mail_missing_donor'  => $missing_donor_email_count,
+        ),
+        $redirect_to
+    );
+
+    return $redirect_to;
+}
+
+add_action( 'admin_notices', 'ttcc_bulk_receipt_mail_admin_notice' );
+function ttcc_bulk_receipt_mail_admin_notice() {
+    if ( empty( $_GET['ttcc_bulk_receipt_mail'] ) ) {
+        return;
+    }
+
+    $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+    if ( $screen && $screen->id !== 'woocommerce_page_wc-orders' ) {
+        return;
+    }
+
+    $success_count             = isset( $_GET['ttcc_bulk_receipt_mail_success'] ) ? absint( $_GET['ttcc_bulk_receipt_mail_success'] ) : 0;
+    $error_count               = isset( $_GET['ttcc_bulk_receipt_mail_error'] ) ? absint( $_GET['ttcc_bulk_receipt_mail_error'] ) : 0;
+    $missing_donor_email_count = isset( $_GET['ttcc_bulk_receipt_mail_missing_donor'] ) ? absint( $_GET['ttcc_bulk_receipt_mail_missing_donor'] ) : 0;
+
+    $class   = $error_count > 0 ? 'notice notice-warning is-dismissible' : 'notice notice-success is-dismissible';
+    $message = '批次寄送捐款收據完成：成功 ' . $success_count . ' 筆，失敗 ' . $error_count . ' 筆。';
+
+    if ( $missing_donor_email_count > 0 ) {
+        $message .= ' 缺捐款者 email：' . $missing_donor_email_count . ' 筆。';
+    }
+
+    echo '<div class="' . esc_attr( $class ) . '"><p>' . esc_html( $message ) . '</p></div>';
+}
+
 //=============================================================================================訂單可以修改建立時間
 add_filter( 'woocommerce_rest_pre_insert_shop_order_object', function( $order, $request ) {
 	if ( isset( $request['date_created'] ) ) {
